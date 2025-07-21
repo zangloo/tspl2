@@ -556,6 +556,67 @@ pub enum QrCodeJustification {
     BottomRight,
 }
 
+impl Into<&'static str> for QrCodeJustification {
+    fn into(self) -> &'static str {
+        match self {
+            QrCodeJustification::UpperLeft => "J1",
+            QrCodeJustification::UpperCenter => "J2",
+            QrCodeJustification::UpperRight => "J3",
+            QrCodeJustification::CenterLeft => "J4",
+            QrCodeJustification::Center => "J5",
+            QrCodeJustification::CenterRight => "J6",
+            QrCodeJustification::BottomLeft => "J7",
+            QrCodeJustification::BottomCenter => "J8",
+            QrCodeJustification::BottomRight => "J9",
+        }
+    }
+}
+
+#[derive(Debug, Display)]
+pub enum QrCodeModel {
+    M1, //(default), original version
+    M2, //enhanced version (Almost smart phone is supported by this version.)
+}
+
+impl Into<&'static str> for QrCodeModel {
+    fn into(self) -> &'static str {
+        match self {
+            QrCodeModel::M1 => "M1",
+            QrCodeModel::M2 => "M2",
+        }
+    }
+}
+
+// don't know what meant
+#[derive(Debug, Display)]
+pub enum QrCodeMask {
+    S0,
+    S1,
+    S2,
+    S3,
+    S4,
+    S5,
+    S6,
+    S7, // default
+    S8,
+}
+
+impl Into<&'static str> for QrCodeMask {
+    fn into(self) -> &'static str {
+        match self {
+            QrCodeMask::S0 => "S0",
+            QrCodeMask::S1 => "S1",
+            QrCodeMask::S2 => "S2",
+            QrCodeMask::S3 => "S3",
+            QrCodeMask::S4 => "S4",
+            QrCodeMask::S5 => "S5",
+            QrCodeMask::S6 => "S6",
+            QrCodeMask::S7 => "S7",
+            QrCodeMask::S8 => "S8",
+        }
+    }
+}
+
 pub struct Printer {
     #[cfg(target_os = "linux")]
     file: std::fs::File,
@@ -589,11 +650,14 @@ impl Printer {
         use std::ffi::CString;
         use std::ptr;
         use windows::Win32::Graphics::Printing::{
-            ClosePrinter, EndDocPrinter, EndPagePrinter, OpenPrinterA, PRINTER_HANDLE, StartDocPrinterA,
+            ClosePrinter, EndDocPrinter, EndPagePrinter, OpenPrinterA, StartDocPrinterA,
             StartPagePrinter, WritePrinter, DOC_INFO_1A, PRINTER_ACCESS_USE, PRINTER_DEFAULTSA,
+            PRINTER_HANDLE,
         };
 
-        let mut printer_handle = PRINTER_HANDLE{ Value: std::ptr::null_mut()};
+        let mut printer_handle = PRINTER_HANDLE {
+            Value: std::ptr::null_mut(),
+        };
 
         // Open the printer
         unsafe {
@@ -608,7 +672,7 @@ impl Printer {
                 &mut printer_handle,
                 Some(&pd),
             )
-                .is_ok()
+            .is_ok()
             {
                 let doc_name_cstring = CString::new("Print Job").unwrap_or_default();
 
@@ -636,7 +700,7 @@ impl Printer {
                     bytes.len() as u32,
                     &mut bytes_written,
                 )
-                    .as_bool()
+                .as_bool()
                 {
                     return Err(anyhow!(windows::core::Error::from_win32()));
                 }
@@ -1199,8 +1263,8 @@ impl Printer {
             height_dots,
             mode
         )
-            .as_bytes()
-            .to_vec();
+        .as_bytes()
+        .to_vec();
         cmd.extend(bitmap_data);
         cmd.extend(crlf);
 
@@ -1509,6 +1573,9 @@ impl Printer {
         cellwidth_dot: u8,
         rotate: Rotation,
         justification: Option<QrCodeJustification>,
+        model: Option<QrCodeModel>,
+        mask: Option<QrCodeMask>,
+        area: Option<u32>,
         content: &str,
     ) -> Result<&mut Self> {
         let ecc_level = match ecc_level {
@@ -1521,27 +1588,32 @@ impl Printer {
             return Err(anyhow!("Wrong cellwidth value. min: 1, max: 10"));
         }
 
-        let cmd = match justification {
-            Some(justification) => format!(
-                "QRCODE {},{},{},{},A,{},{},\"{}\"\r\n",
-                x_upper_left.to_dots_raw(self.resolution),
-                y_upper_left.to_dots_raw(self.resolution),
-                ecc_level,
-                cellwidth_dot,
-                rotate,
-                justification,
-                content
-            ),
-            None => format!(
-                "QRCODE {},{},{},{},A,{},\"{}\"\r\n",
-                x_upper_left.to_dots_raw(self.resolution),
-                y_upper_left.to_dots_raw(self.resolution),
-                ecc_level,
-                cellwidth_dot,
-                rotate,
-                content
-            ),
-        };
+        let mut cmd = format!(
+            "QRCODE {},{},{},{},A,{},",
+            x_upper_left.to_dots_raw(self.resolution),
+            y_upper_left.to_dots_raw(self.resolution),
+            ecc_level,
+            cellwidth_dot,
+            rotate,
+        );
+        if let Some(justification) = justification {
+            cmd.push_str(justification.into());
+            cmd.push(',');
+        }
+        if let Some(model) = model {
+            cmd.push_str(model.into());
+            cmd.push(',');
+        }
+        if let Some(mask) = mask {
+            cmd.push_str(mask.into());
+            cmd.push(',');
+        }
+        if let Some(area) = area {
+            cmd.push_str(&format!("X{area},"));
+        }
+        cmd.push('"');
+        cmd.push_str(content);
+        cmd.push_str("\"\r\n");
 
         debug!("{cmd}");
         self.write_command(cmd.as_bytes())?;
