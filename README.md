@@ -64,3 +64,24 @@ fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+## for Windows
+Using printer name for Printer::with_resolution, for TSC TE344, with below code to create printer instance.
+```rust
+use anyhow::Result;
+use tspl2::{Alignment, Barcode, Font, HumanReadable, NarrowWide, Printer, Rotation, Size, Tape};
+
+fn main() -> Result<()> {
+    let tape = Tape {
+        width: Size::Metric(30.0),
+        height: Some(Size::Metric(20.0)),
+        gap: Size::Metric(2.0),
+        gap_offset: None,
+    };
+
+    let mut printer = Printer::with_resolution("TSC TE344", tape, 300)?;
+    // same with previous example to print 
+    ...
+    Ok(())
+}
+```
